@@ -412,7 +412,11 @@ async def scrape_product_data(url: str) -> dict:
         extracted = result.final_result()
         print(f"[DEBUG] browser_use agent output for {url}: {extracted}")
         import json
+        import re
         if isinstance(extracted, str):
+            # Remove Markdown code block if present
+            extracted = re.sub(r"^```json\\s*|^```\\s*|```$", "", extracted.strip(), flags=re.MULTILINE)
+            extracted = extracted.strip()
             try:
                 extracted = json.loads(extracted)
             except Exception as e:
