@@ -3,7 +3,10 @@ import { ShieldCheck, Sun, Moon, UploadCloud, ExternalLink } from 'lucide-react'
 import './App.css'
 
 function App() {
+  const [mode, setMode] = useState('link'); // 'link' or 'image'
   const [productLink, setProductLink] = useState('');
+  const [productName, setProductName] = useState('');
+  const [productDesc, setProductDesc] = useState('');
   const [productImage, setProductImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [result, setResult] = useState(null);
@@ -57,7 +60,10 @@ function App() {
     setDarkMode((prev) => !prev);
   };
 
-  const canSubmit = productLink && productImage && !loading;
+  // Validation for enabling the button
+  const canSubmitLink = productLink && !loading;
+  // For image: either image is uploaded OR (name and description are filled)
+  const canSubmitImage = (!loading && (productImage || (productName && productDesc)));
 
   return (
     <div className={`landing-bg${darkMode ? ' dark' : ''}`}>
@@ -80,69 +86,129 @@ function App() {
             Verify Product <span className="highlight">Authenticity</span>
           </h1>
           <p className="hero-subtitle">AI-powered authenticity verification in seconds</p>
-          <p className="hero-desc">Upload a product image and paste the link to get instant results</p>
+          <p className="hero-desc">Upload a product image and paste the link to get results</p>
         </header>
         <div className="hero-divider" />
         <main className="main-section">
-          <section className="form-section">
-            <form className="verify-form card" onSubmit={handleSubmit} autoComplete="off">
-              <label className="input-label">
-                Product Link
-                <div className="input-with-icon">
-                  <input
-                    type="url"
-                    value={productLink}
-                    onChange={e => setProductLink(e.target.value)}
-                    placeholder="https://example.com/product"
-                    required
-                    autoFocus
-                  />
-                  <span className="input-icon">
-                    <ExternalLink size={18} />
-                  </span>
-                </div>
-              </label>
-              <div
-                className={`upload-zone${imagePreview ? ' has-image' : ''}`}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                tabIndex={0}
-                aria-label="Product image upload area"
-                onClick={() => !imagePreview && fileInputRef.current && fileInputRef.current.click()}
-                role="button"
+          <section className="form-section side-by-side">
+            {/* Link Card */}
+            <div
+              className={`card side-card${mode === 'link' ? ' active' : ' inactive'}`}
+              onClick={() => setMode('link')}
+              tabIndex={0}
+              role="button"
+              aria-pressed={mode === 'link'}
+            >
+              <form
+                className="verify-form"
+                onSubmit={handleSubmit}
+                autoComplete="off"
+                style={{ pointerEvents: mode === 'link' ? 'auto' : 'none', opacity: mode === 'link' ? 1 : 0.5 }}
               >
-                {!imagePreview ? (
-                  <div className="upload-content">
-                    <UploadCloud size={40} strokeWidth={2.2} />
-                    <div className="upload-instructions">
-                      <span className="upload-main">Drop your image here</span>
-                      <span className="upload-or"> or <span className="upload-browse">browse files</span></span>
-                    </div>
+                <label className="input-label">
+                  Product Link
+                  <div className="input-with-icon">
                     <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      ref={fileInputRef}
-                      style={{ display: 'none' }}
-                      tabIndex={-1}
+                      type="url"
+                      value={productLink}
+                      onChange={e => setProductLink(e.target.value)}
+                      placeholder="https://example.com/product"
+                      required={mode === 'link'}
+                      autoFocus={mode === 'link'}
+                      disabled={mode !== 'link'}
+                    />
+                    <span className="input-icon">
+                      <ExternalLink size={18} />
+                    </span>
+                  </div>
+                </label>
+                <button type="submit" className="verify-btn" disabled={!canSubmitLink || mode !== 'link'}>
+                  {loading && mode === 'link' ? 'Verifying...' : 'Verify'}
+                </button>
+              </form>
+            </div>
+            {/* Image Card */}
+            <div
+              className={`card side-card image-card${mode === 'image' ? ' active' : ' inactive'}`}
+              onClick={() => setMode('image')}
+              tabIndex={0}
+              role="button"
+              aria-pressed={mode === 'image'}
+            >
+              <form
+                className="verify-form"
+                onSubmit={handleSubmit}
+                autoComplete="off"
+                style={{ pointerEvents: mode === 'image' ? 'auto' : 'none', opacity: mode === 'image' ? 1 : 0.5 }}
+              >
+                <div className="image-form-layout">
+                  <div className="image-form-left">
+                    <input
+                      type="text"
+                      value={productName}
+                      onChange={e => setProductName(e.target.value)}
+                      placeholder="Product Name"
+                      required={mode === 'image'}
+                      autoFocus={mode === 'image'}
+                      disabled={mode !== 'image'}
+                      className="form-input"
+                    />
+                    <textarea
+                      value={productDesc}
+                      onChange={e => setProductDesc(e.target.value)}
+                      placeholder="Product Description"
+                      disabled={mode !== 'image'}
+                      className="form-input description-input"
+                      rows="3"
                     />
                   </div>
-                ) : (
-                  <div className="image-preview-wrapper">
-                    <img src={imagePreview} alt="Preview" className="image-preview" />
-                    <button type="button" className="remove-image-btn" onClick={handleRemoveImage} aria-label="Remove image">
-                      Remove
-                    </button>
+                  <div className="image-form-right">
+                    <div
+                      className={`upload-zone compact-upload${imagePreview ? ' has-image' : ''}`}
+                      onDrop={handleDrop}
+                      onDragOver={handleDragOver}
+                      tabIndex={0}
+                      aria-label="Product image upload area"
+                      onClick={() => mode === 'image' && !imagePreview && fileInputRef.current && fileInputRef.current.click()}
+                      role="button"
+                      style={{ pointerEvents: mode === 'image' ? 'auto' : 'none', opacity: mode === 'image' ? 1 : 0.5 }}
+                    >
+                      {!imagePreview ? (
+                        <div className="upload-content">
+                          <UploadCloud size={40} strokeWidth={2.2} />
+                          <div className="upload-instructions">
+                            <span className="upload-main">Drop image here</span>
+                            <span className="upload-or">or <span className="upload-browse">browse files</span></span>
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageChange}
+                            ref={fileInputRef}
+                            style={{ display: 'none' }}
+                            tabIndex={-1}
+                            disabled={mode !== 'image'}
+                          />
+                        </div>
+                      ) : (
+                        <div className="image-preview-wrapper">
+                          <img src={imagePreview} alt="Preview" className="image-preview compact-preview" />
+                          <button type="button" className="remove-image-btn compact-remove" onClick={handleRemoveImage} aria-label="Remove image" disabled={mode !== 'image'}>
+                            ×
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-              <button type="submit" className="verify-btn" disabled={!canSubmit}>
-                {loading ? 'Verifying...' : 'Verify Authenticity'}
-              </button>
-            </form>
-            {error && <div className="error card">{error}</div>}
-            {result && <div className="result card">{result}</div>}
+                </div>
+                <button type="submit" className="verify-btn" disabled={!canSubmitImage || mode !== 'image'}>
+                  {loading && mode === 'image' ? 'Verifying...' : 'Verify'}
+                </button>
+              </form>
+            </div>
           </section>
+          {error && <div className="error card">{error}</div>}
+          {result && <div className="result card">{result}</div>}
         </main>
       </div>
     </div>
