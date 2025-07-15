@@ -62,8 +62,11 @@ function App() {
 
   // Validation for enabling the button
   const canSubmitLink = productLink && !loading;
-  // For image: either image is uploaded OR (name and description are filled)
-  const canSubmitImage = (!loading && (productImage || (productName && productDesc)));
+  // For image form: either (name AND description) OR image is required
+  const canSubmitImage = !loading && (
+    (productName && productDesc) || // Both text fields filled
+    productImage // OR image uploaded
+  );
 
   return (
     <div className={`landing-bg${darkMode ? ' dark' : ''}`}>
@@ -147,8 +150,8 @@ function App() {
                       type="text"
                       value={productName}
                       onChange={e => setProductName(e.target.value)}
-                      placeholder="Product Name"
-                      required={mode === 'image'}
+                      placeholder="Product name (required with description)"
+                      required={mode === 'image' && !productImage}
                       autoFocus={mode === 'image'}
                       disabled={mode !== 'image'}
                       className="form-input"
@@ -156,26 +159,29 @@ function App() {
                     <textarea
                       value={productDesc}
                       onChange={e => setProductDesc(e.target.value)}
-                      placeholder="Product Description"
+                      placeholder="Product description (required with name)"
                       disabled={mode !== 'image'}
+                      required={mode === 'image' && !productImage}
                       className="form-input description-input"
                       rows="3"
                     />
                   </div>
                   <div className="image-form-right">
                     <div
-                      className={`upload-zone compact-upload${imagePreview ? ' has-image' : ''}`}
+                      className={`compact-upload${imagePreview ? ' has-image' : ''}`}
                       onDrop={handleDrop}
                       onDragOver={handleDragOver}
                       tabIndex={0}
                       aria-label="Product image upload area"
                       onClick={() => mode === 'image' && !imagePreview && fileInputRef.current && fileInputRef.current.click()}
                       role="button"
-                      style={{ pointerEvents: mode === 'image' ? 'auto' : 'none', opacity: mode === 'image' ? 1 : 0.5 }}
+                      style={{ pointerEvents: mode === 'image' ? 'auto' : 'none' }}
                     >
                       {!imagePreview ? (
                         <div className="upload-content">
-                          <UploadCloud size={40} strokeWidth={2.2} />
+                          <span className="upload-icon">
+                            <UploadCloud size={28} strokeWidth={1.5} />
+                          </span>
                           <div className="upload-instructions">
                             <span className="upload-main">Drop image here</span>
                             <span className="upload-or">or <span className="upload-browse">browse files</span></span>
@@ -193,7 +199,13 @@ function App() {
                       ) : (
                         <div className="image-preview-wrapper">
                           <img src={imagePreview} alt="Preview" className="image-preview compact-preview" />
-                          <button type="button" className="remove-image-btn compact-remove" onClick={handleRemoveImage} aria-label="Remove image" disabled={mode !== 'image'}>
+                          <button 
+                            type="button" 
+                            className="remove-image-btn compact-remove" 
+                            onClick={handleRemoveImage} 
+                            aria-label="Remove image"
+                            disabled={mode !== 'image'}
+                          >
                             ×
                           </button>
                         </div>
