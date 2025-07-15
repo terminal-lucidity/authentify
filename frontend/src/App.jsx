@@ -150,7 +150,7 @@ function App() {
                       type="text"
                       value={productName}
                       onChange={e => setProductName(e.target.value)}
-                      placeholder="Product name (required with description)"
+                      placeholder="Product name"
                       required={mode === 'image' && !productImage}
                       autoFocus={mode === 'image'}
                       disabled={mode !== 'image'}
@@ -159,7 +159,7 @@ function App() {
                     <textarea
                       value={productDesc}
                       onChange={e => setProductDesc(e.target.value)}
-                      placeholder="Product description (required with name)"
+                      placeholder="Product description"
                       disabled={mode !== 'image'}
                       required={mode === 'image' && !productImage}
                       className="form-input description-input"
