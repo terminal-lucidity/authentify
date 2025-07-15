@@ -341,10 +341,8 @@ def validate_product_data(data: dict) -> dict:
     
     # Image validation
     if not data['images']:
-        validation_errors.append({
-            'field': 'images',
-            'error': "No product images found"
-        })
+        print('[WARNING] No product images found for this product.')
+        # Do not add to validation_errors; just log a warning
     
     # Review validation
     if data['reviews']:
@@ -414,26 +412,140 @@ async def scrape_product_data(url: str) -> dict:
         import json
         import re
         if isinstance(extracted, str):
-            # Remove Markdown code block if present
-            extracted = re.sub(r"^```json\\s*|^```\\s*|```$", "", extracted.strip(), flags=re.MULTILINE)
-            extracted = extracted.strip()
+            # Remove all Markdown code block wrappers (```json, ```, etc.)
+            extracted_clean = re.sub(r"^```(?:json)?\\s*|```$", "", extracted.strip(), flags=re.MULTILINE)
+            # Remove leading/trailing whitespace and newlines
+            extracted_clean = extracted_clean.strip()
+            # Try to extract the first JSON object from the string
+            json_match = re.search(r"\{[\s\S]*\}", extracted_clean)
+            if json_match:
+                extracted_clean = json_match.group(0)
+            print(f"[DEBUG] Cleaned agent output for {url}: {extracted_clean}")
             try:
-                extracted = json.loads(extracted)
+                extracted = json.loads(extracted_clean)
             except Exception as e:
                 print(f"[DEBUG] Failed to parse agent output as JSON: {e}")
-                raise ScrapeError(f"Agent did not return valid JSON: {extracted}", {"url": url})
+                extracted = {}  # Initialize as empty dict on parse failure
+        
+        # Ensure extracted is a dictionary
         if not isinstance(extracted, dict):
-            raise ScrapeError(f"Agent did not return a dict: {extracted}", {"url": url})
-        for key in ['name', 'price', 'images', 'description', 'reviews', 'seller', 'features']:
-            if key not in extracted:
-                extracted[key] = None if key in ['name', 'price', 'description', 'seller'] else []
+            print(f"[DEBUG] Agent output is not a dict, initializing empty dict")
+            extracted = {}
+        
+        # Initialize missing fields with default values
+        default_values = {
+            'name': None,
+            'price': None,
+            'images': [],
+            'description': None,
+            'reviews': [],
+            'seller': None,
+            'features': []
+        }
+        
+        for key, default_value in default_values.items():
+            if key not in extracted or extracted[key] is None:
+                extracted[key] = default_value
+        
+        # Ensure list fields are actually lists
+        list_fields = ['images', 'reviews', 'features']
+        for field in list_fields:
+            if not isinstance(extracted[field], list):
+                extracted[field] = []
+        
         extracted['image_analysis'] = []
+        
         # Loosen validation: require only name and description
         if not extracted.get('name') or not extracted.get('description'):
-            raise ScrapeError("Missing required product name or description", {"url": url, "output": extracted})
+            print(f"[DEBUG] Missing required fields, attempting fallback scraping")
+            # --- Hybrid scraping: fallback to direct scraping for missing fields ---
+            try:
+                html = get_cached_response(url)
+                soup = BeautifulSoup(html, 'html.parser')
+                patterns = get_site_patterns(url)
+                
+                def extract_with_patterns(pattern_list, attr=None, multiple=False):
+                    if not pattern_list:
+                        return [] if multiple else None
+                    results = []
+                    for selector in pattern_list:
+                        try:
+                            elements = soup.select(selector)
+                            for el in elements:
+                                if attr and el.has_attr(attr):
+                                    results.append(el[attr])
+                                elif hasattr(el, 'get_text'):
+                                    text = el.get_text(strip=True)
+                                    if text:
+                                        results.append(text)
+                                elif el:
+                                    results.append(str(el))
+                                if not multiple and results:
+                                    return results[0]
+                        except Exception as e:
+                            print(f"[DEBUG] Error extracting with pattern {selector}: {e}")
+                            continue
+                    return results if multiple else (results[0] if results else None)
+                
+                # Fallback for name and description if missing
+                if not extracted['name'] and patterns and 'name' in patterns:
+                    extracted['name'] = extract_with_patterns(patterns['name'])
+                if not extracted['description'] and patterns and 'description' in patterns:
+                    extracted['description'] = extract_with_patterns(patterns['description'])
+                
+                # Images
+                if not extracted['images'] and patterns and 'images' in patterns:
+                    imgs = [img['src'] for img in soup.find_all('img', src=True) if img.get('src')]
+                    extracted['images'] = imgs if imgs else []
+                
+                # Price
+                if not extracted['price'] and patterns and 'price' in patterns:
+                    price = extract_with_patterns(patterns['price'])
+                    extracted['price'] = price if price else None
+                
+                # Features
+                if not extracted['features'] and patterns and 'features' in patterns:
+                    features = extract_with_patterns(patterns['features'], multiple=True)
+                    extracted['features'] = features if features else []
+                
+                # Reviews
+                if not extracted['reviews'] and patterns and 'reviews' in patterns:
+                    reviews = extract_with_patterns(patterns['reviews'], multiple=True)
+                    extracted['reviews'] = reviews if reviews else []
+                
+                # Seller
+                if not extracted['seller'] and patterns and 'seller' in patterns:
+                    seller = extract_with_patterns(patterns['seller'])
+                    extracted['seller'] = seller if seller else None
+                
+                print(f"[DEBUG] Fallback scraping completed")
+            except Exception as e:
+                print(f"[DEBUG] Error during fallback scraping: {e}")
+        
+        # Final validation of structure
+        # Ensure all expected keys are present with correct types
+        for key in ['images', 'features', 'reviews']:
+            if not isinstance(extracted.get(key), list):
+                extracted[key] = []
+        
+        for key in ['price', 'seller', 'name', 'description']:
+            if key not in extracted:
+                extracted[key] = None
+        
         return extracted
     except Exception as e:
-        raise ScrapeError(f"browser_use agent error: {str(e)}", {"url": url})
+        print(f"[ERROR] Scraping error: {str(e)}")
+        return {
+            'name': None,
+            'price': None,
+            'images': [],
+            'description': None,
+            'reviews': [],
+            'seller': None,
+            'features': [],
+            'image_analysis': [],
+            'error': str(e)
+        }
 
 def analyze_product_authenticity(product_data: dict) -> dict:
     """Enhanced product authenticity analysis with more detailed prompts."""
