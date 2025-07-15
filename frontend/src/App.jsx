@@ -82,6 +82,7 @@ function App() {
           <p className="hero-subtitle">AI-powered authenticity verification in seconds</p>
           <p className="hero-desc">Upload a product image and paste the link to get instant results</p>
         </header>
+        <div className="hero-divider" />
         <main className="main-section">
           <section className="form-section">
             <form className="verify-form card" onSubmit={handleSubmit} autoComplete="off">

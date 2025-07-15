@@ -110,7 +110,7 @@ body, html, #root {
 }
 
 .hero {
-  padding: 2.5rem 1rem 1.2rem 1rem;
+  padding: 2.2rem 1rem 0.8rem 1rem;
   text-align: center;
   position: relative;
   margin-bottom: 0.2rem;
@@ -141,10 +141,10 @@ body, html, #root {
   justify-content: center;
 }
 .hero-title {
-  font-size: 2.3rem;
+  font-size: 2.15rem;
   font-weight: 800;
   color: #23216c;
-  margin: 0.5rem 0 0.25rem 0;
+  margin: 0.5rem 0 0.18rem 0;
   transition: color 0.3s;
   letter-spacing: -1px;
 }
@@ -152,12 +152,19 @@ body, html, #root {
   color: #6366f1;
   font-weight: 900;
   letter-spacing: -1.5px;
+  transition: color 0.3s;
+}
+.landing-bg.dark .hero-title {
+  color: #f3f4fa;
+}
+.landing-bg.dark .highlight {
+  color: #a5b4fc;
 }
 .hero-subtitle {
-  font-size: 1.08rem;
+  font-size: 1.01rem;
   color: #5c5e7a;
   font-weight: 600;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.18rem;
   transition: color 0.3s;
 }
 .landing-bg.dark .hero-tagline {
@@ -165,13 +172,22 @@ body, html, #root {
 }
 .hero-desc {
   color: #7b7fa8;
-  font-size: 0.99rem;
+  font-size: 0.97rem;
+  font-weight: 500;
   max-width: 480px;
-  margin: 0.5rem auto 0 auto;
+  margin: 0.2rem auto 0 auto;
   transition: color 0.3s;
 }
 .landing-bg.dark .hero-desc {
   color: #cbd5e1;
+}
+.hero-divider {
+  width: 60px;
+  height: 4px;
+  background: linear-gradient(90deg, #6366f1 0%, #a5b4fc 100%);
+  border-radius: 2px;
+  margin: 1.1rem auto 0.7rem auto;
+  opacity: 0.13;
 }
 
 .main-section {
@@ -200,10 +216,10 @@ body, html, #root {
   border-radius: 2.2rem;
   box-shadow: 0 12px 48px 0 rgba(99, 102, 241, 0.13), 0 2px 12px 0 rgba(99, 102, 241, 0.08);
   border: 1.5px solid #e0e7ff;
-  padding: 2.2rem 2rem 2rem 2rem;
-  max-width: 540px;
+  padding: 2.1rem 1.7rem 1.7rem 1.7rem;
+  max-width: 480px;
   width: 100%;
-  margin: 2.2rem auto 0 auto;
+  margin: 1.2rem auto 0 auto;
   transition: background 0.3s, color 0.3s, box-shadow 0.3s;
   display: flex;
   flex-direction: column;
@@ -241,7 +257,7 @@ body, html, #root {
 }
 .input-with-icon {
   position: relative;
-  width: 92%;
+  width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
