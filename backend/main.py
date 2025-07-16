@@ -16,9 +16,10 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import aiohttp
 import time
-from browser_use import Agent
+from browser_use import Agent, BrowserSession
 import google.generativeai as genai
 from bs4 import BeautifulSoup, Tag
+from fastapi.responses import JSONResponse
 
 # Load environment variables
 load_dotenv()
@@ -26,7 +27,7 @@ load_dotenv()
 # Restore Gemini API configuration and model setup
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=GOOGLE_API_KEY)
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel('gemini-1.5-pro-latest')
 vision_model = genai.GenerativeModel('gemini-pro-vision')
 
 # Initialize FastAPI app
@@ -140,6 +141,10 @@ class ProductURL(BaseModel):
     url: HttpUrl
     name: Optional[str] = Field(None, description="Optional product name override")
     description: Optional[str] = Field(None, description="Optional description override")
+
+class ProductText(BaseModel):
+    name: str = Field(..., description="The name of the product")
+    description: str = Field(..., description="The description of the product")
 
 class ProductAnalysisResponse(BaseModel):
     analysis: Dict
@@ -397,7 +402,7 @@ async def scrape_product_data(url: str) -> dict:
             except ImportError:
                 print('[ERROR] ChatGoogle is not available')
                 return {**default_response, 'error': 'ChatGoogle is not available'}
-            llm = ChatGoogle(model='gemini-1.5-pro', api_key=GOOGLE_API_KEY)
+            llm = ChatGoogle(model='Gemini-2.0-flash', api_key=GOOGLE_API_KEY)
         else:
             print('[DEBUG] GOOGLE_API_KEY not set, falling back to OpenAI')
             from browser_use.llm import ChatOpenAI
@@ -421,7 +426,26 @@ async def scrape_product_data(url: str) -> dict:
             llm=llm,
             use_vision=True
         )
-        result = await agent.run()
+
+        # Reverted to original agent.run() call and added a timeout/retry mechanism
+        MAX_RETRIES = 3
+        for attempt in range(MAX_RETRIES):
+            try:
+                print(f"[DEBUG] Running agent for {url}, attempt {attempt + 1}/{MAX_RETRIES}")
+                # Set a timeout for the agent run, e.g., 60 seconds
+                result = await asyncio.wait_for(agent.run(), timeout=60.0)
+                break  # If successful, exit the loop
+            except asyncio.TimeoutError:
+                print(f"[WARNING] Agent run timed out for {url} on attempt {attempt + 1}. Retrying...")
+                if attempt == MAX_RETRIES - 1:
+                    raise  # Re-raise the timeout error on the last attempt
+            except Exception as e:
+                print(f"[ERROR] An unexpected error occurred during agent run: {e}")
+                raise # Re-raise other exceptions immediately
+
+        if 'result' not in locals():
+             raise Exception("Agent failed to produce a result after all retries.")
+             
         extracted = result.final_result()
         print(f"[DEBUG] browser_use agent output for {url}: {extracted}")
         import json
@@ -676,6 +700,23 @@ def analyze_product_authenticity(product_data: dict) -> dict:
             'product_data': product_data if isinstance(product_data, dict) else {}
         }
 
+def get_recommendations(verdict, product_data):
+    if verdict == "Likely Counterfeit":
+        return [
+            "Buy from the official brand website.",
+            "Check for verified reviews.",
+            "Avoid deals that seem too good to be true."
+        ]
+    elif verdict == "Likely Authentic":
+        return [
+            "Still check seller ratings before purchase.",
+            "Ask for a warranty or proof of authenticity."
+        ]
+    else:
+        return [
+            "Proceed with caution. If unsure, consult the brand or a trusted seller."
+        ]
+
 @app.post("/scrape_product", response_model=ProductAnalysisResponse)
 async def scrape_product(product: ProductURL):
     """Enhanced endpoint with validation and error handling."""
@@ -694,8 +735,12 @@ async def scrape_product(product: ProductURL):
         
         # Analyze authenticity
         result = analyze_product_authenticity(product_data)
-        
-        return result
+        recommendations = get_recommendations(result.get("verdict"), product_data)
+        return {
+            "analysis": result,
+            "product_data": result.get("product_data", {}),
+            "recommendations": recommendations
+        }
         
     except ScrapeError as e:
         raise HTTPException(
@@ -704,6 +749,33 @@ async def scrape_product(product: ProductURL):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/analyze_text", response_model=ProductAnalysisResponse)
+def analyze_text(product: ProductText):
+    """Analyzes product authenticity based on provided name and description."""
+    product_data = {
+        "name": product.name,
+        "description": product.description,
+    }
+    
+    # Analyze authenticity
+    result = analyze_product_authenticity(product_data)
+    recommendations = get_recommendations(result.get("verdict"), product_data)
+    return {
+        "analysis": result,
+        "product_data": result.get("product_data", {}),
+        "recommendations": recommendations
+    }
+
+@app.get("/list_gemini_models")
+def list_gemini_models():
+    try:
+        genai.configure(api_key=GOOGLE_API_KEY)
+        models = genai.list_models()
+        model_names = [m.name for m in models]
+        return JSONResponse(content={"models": model_names})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 if __name__ == "__main__":
     import uvicorn

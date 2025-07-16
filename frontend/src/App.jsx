@@ -87,8 +87,33 @@ function HomePage() {
           navigate('/result', { state: { result: data } });
         }
       } else {
-        // Handle image verification (future)
-        navigate('/result', { state: { result: { analysis: "Image verification coming soon! We're working on it." } } });
+        // Handle image verification (future) and text verification
+        if (productImage) {
+          // Image logic will go here
+          navigate('/result', { state: { result: { analysis: "Image verification coming soon! We're working on it." } } });
+        } else {
+          // Handle text verification
+          const response = await fetch(`${API_URL}/analyze_text`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name: productName, description: productDesc }),
+          });
+
+          let data;
+          try {
+            data = await response.json();
+          } catch {
+            data = { error: 'Invalid JSON response from server.' };
+          }
+
+          if (!response.ok) {
+            navigate('/result', { state: { error: data?.detail || data?.error || `HTTP error! status: ${response.status}` } });
+          } else {
+            navigate('/result', { state: { result: data } });
+          }
+        }
       }
     } catch (err) {
       console.error('Error:', err);
@@ -305,6 +330,34 @@ function ResultPage() {
   }
 
   // If the backend returned the new structured format
+  if (result.analysis) {
+    const analysis = result.analysis;
+    return (
+      <div className="result card">
+        <h2>Authenticity Analysis</h2>
+        <div className="verdict-row">
+          <span className={`verdict-badge ${analysis.verdict?.toLowerCase()}`}>{analysis.verdict}</span>
+          {typeof analysis.confidence === 'number' && (
+            <span className="confidence">Confidence: {analysis.confidence}%</span>
+          )}
+        </div>
+        <pre className="analysis-text">{analysis.full_analysis}</pre>
+        {Array.isArray(result.recommendations) && result.recommendations.length > 0 && (
+          <div className="recommendations">
+            <h3>Recommendations</h3>
+            <ul>
+              {result.recommendations.map((rec, idx) => (
+                <li key={idx}>{rec}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <button className="return-button" onClick={() => navigate('/')}>Verify Another Product</button>
+      </div>
+    );
+  }
+
+  // If the backend returned the old format
   if (result.verdict || result.full_analysis) {
     return (
       <div className="result card">

@@ -1,11 +1,14 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 from dotenv import load_dotenv
 import os
 import csv
 import asyncio
+import google.generativeai as genai
+from typing import Optional, List, Dict
+from fastapi import HTTPException
 
 # browser_use imports
 from browser_use.llm import ChatGoogle
@@ -42,118 +45,74 @@ class AuthenticityResult(BaseModel):
     features: dict = Field(default_factory=dict)
     reviews: dict = Field(default_factory=dict)
 
+class ProductURL(BaseModel):
+    url: HttpUrl
+    name: Optional[str] = Field(None, description="Optional product name override")
+    description: Optional[str] = Field(None, description="Optional description override")
+
+class ProductAnalysisResponse(BaseModel):
+    analysis: Dict
+    product_data: Dict
+
+class ScrapeError(Exception):
+    def __init__(self, message: str, details: Optional[Dict] = None):
+        self.message = message
+        self.details = details or {}
+        super().__init__(self.message)
+
+# Copy or import scrape_product_data and analyze_product_authenticity from main.py
+# For now, import them if possible:
+from backend.main import scrape_product_data, analyze_product_authenticity
+
 @app.get("/health")
 def health_check():
     return JSONResponse(content={"status": "healthy"})
 
-@app.post("/scrape_product")
-async def scrape_product(request: ScrapeRequest):
-    url = request.url
-    print(f"Received request to scrape: {url}")
-
-    # Step 1: Initialize LLM (Gemini 2.0 for scraping)
-    print("Initializing ChatGoogle (Gemini Pro) model...")
-    # Standard Gemini model initialization for backend
-    llm = ChatGoogle(model='gemini-2.5-pro', api_key=GOOGLE_API_KEY)
-
-    # Step 2: Create Agent with scraping task
-    task = f"Scrape the product page at {url} and extract: product images (urls or files), product description, all available features, and consumer reviews. Return as a JSON object with keys: images (list of urls/paths), description (string), features (list of strings), reviews (list of strings)."
-    print("Creating Agent for scraping...")
-    agent = Agent(task=task, llm=llm)
-
-    # Step 3: Run the agent to scrape the product page
-    print("Running agent to scrape product page...")
+@app.post("/scrape_product", response_model=ProductAnalysisResponse)
+async def scrape_product(product: ProductURL):
     try:
-        result = await agent.run(max_steps=10)
-    except Exception as e:
-        print(f"Error during scraping: {e}")
-        return JSONResponse(content={"error": str(e)}, status_code=500)
-
-    # Step 4: Extract relevant info from agent result as JSON
-    print("Extracting scraped data from agent result...")
-    scraped = None
-    for h in result.history:
-        if h.model_output and hasattr(h.model_output, 'memory'):
-            try:
-                # Try to parse as JSON
-                import json
-                mem = h.model_output.memory
-                if isinstance(mem, str):
-                    scraped_json = json.loads(mem)
-                else:
-                    scraped_json = mem
-                scraped = ProductData(**scraped_json)
-                break
-            except Exception as e:
-                print(f"Error parsing agent output as JSON: {e}")
-    if not scraped:
-        print("No valid JSON scraped data found.")
-        scraped = ProductData()
-
-    print(f"Scraped data: {scraped.dict()}")
-
-    # Step 5: Save to CSV
-    print("Saving scraped data to CSV...")
-    csv_file = "scraped_products.csv"
-    file_exists = os.path.isfile(csv_file)
-    with open(csv_file, mode='a', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["url", "images", "description", "features", "reviews"])
-        writer.writerow([
-            url,
-            ";".join(scraped.images),
-            scraped.description or "",
-            ";".join(scraped.features),
-            ";".join(scraped.reviews)
-        ])
-    print(f"Saved data to {csv_file}")
-
-    # Step 6: Use Gemini 1.0 Pro to check for fake/real (direct prompt, not Agent)
-    print("Initializing ChatGoogle (Gemini 1.0 Pro) for authenticity check...")
-    llm_check = ChatGoogle(model='gemini-1.0-pro', api_key=GOOGLE_API_KEY)
-    prompt = (
-        "Given the following product data, analyze and determine if any of the images, content, or reviews appear fake or AI-generated. "
-        "Return a JSON object with keys: images, description, features, reviews. "
-        "Each key should have a value that is a dictionary with keys: 'verdict' (either 'real' or 'fake') and 'explanation' (a short explanation). "
-        f"Product data: images: {scraped.images}, description: {scraped.description}, features: {scraped.features}, reviews: {scraped.reviews}"
-    )
-    from browser_use.llm.messages import UserMessage
-    user_message = UserMessage(content=prompt)
-    print("Sending prompt to Gemini 2.5 Pro...")
-    try:
-        response = await llm_check.ainvoke([user_message])
-        import json
-        # Fix: extract string from response.completion correctly
-        completion_str = None
-        if hasattr(response, 'completion'):
-            completion = response.completion
-            if isinstance(completion, str):
-                completion_str = completion
-            elif hasattr(completion, 'content'):
-                completion_str = completion.content
-            else:
-                completion_str = str(completion)
-        else:
-            completion_str = str(response)
-        authenticity_json = json.loads(completion_str)
-        authenticity = AuthenticityResult(**authenticity_json)
-    except Exception as e:
-        print(f"Error during authenticity check: {e}")
-        # Always return a dict for authenticity
-        authenticity = AuthenticityResult(
-            images={"verdict": "error", "explanation": str(e)},
-            description={"verdict": "error", "explanation": str(e)},
-            features={"verdict": "error", "explanation": str(e)},
-            reviews={"verdict": "error", "explanation": str(e)}
+        # Scrape product data
+        product_data = await scrape_product_data(str(product.url))
+        
+        # Override with provided data if any
+        if product.name:
+            product_data['name'] = product.name
+        if product.description:
+            product_data['description'] = product.description
+            
+        # Add URL to product data
+        product_data['url'] = str(product.url)
+        
+        # Analyze authenticity
+        result = analyze_product_authenticity(product_data)
+        
+        # --- FIX: Wrap result in 'analysis' key as required by response_model ---
+        return {
+            "analysis": {
+                "verdict": result.get("verdict"),
+                "confidence": result.get("confidence"),
+                "full_analysis": result.get("full_analysis"),
+            },
+            "product_data": result.get("product_data", {})
+        }
+        
+    except ScrapeError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": e.message, "details": e.details}
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    print(f"Authenticity analysis: {authenticity.dict()}")
-
-    return JSONResponse(content={
-        "scraped": scraped.dict(),
-        "authenticity": authenticity.dict()
-    })
+@app.get("/list_gemini_models")
+def list_gemini_models():
+    try:
+        genai.configure(api_key=GOOGLE_API_KEY)
+        models = genai.list_models()
+        model_names = [m.name for m in models]
+        return JSONResponse(content={"models": model_names})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 if __name__ == "__main__":
