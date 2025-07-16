@@ -2,8 +2,6 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl, Field
 from typing import Optional, List, Dict
-import google.generativeai as genai
-from bs4 import BeautifulSoup, Tag
 import requests
 import pandas as pd
 import os
@@ -19,12 +17,15 @@ from concurrent.futures import ThreadPoolExecutor
 import aiohttp
 import time
 from browser_use import Agent
+import google.generativeai as genai
+from bs4 import BeautifulSoup, Tag
 
 # Load environment variables
 load_dotenv()
 
-# Configure Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Restore Gemini API configuration and model setup
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel('gemini-pro')
 vision_model = genai.GenerativeModel('gemini-pro-vision')
 
@@ -373,6 +374,19 @@ def validate_product_data(data: dict) -> dict:
     return data
 
 async def scrape_product_data(url: str) -> dict:
+    """Scrape product data from a URL using browser_use agent with fallback to BeautifulSoup."""
+    default_response = {
+        'name': None,
+        'price': None,
+        'images': [],
+        'description': None,
+        'reviews': [],
+        'seller': None,
+        'features': [],
+        'image_analysis': [],
+        'url': url
+    }
+    
     try:
         import os
         # Use Gemini (ChatGoogle) if GOOGLE_API_KEY is set, else fallback to OpenAI
@@ -381,8 +395,9 @@ async def scrape_product_data(url: str) -> dict:
             try:
                 from browser_use.llm import ChatGoogle
             except ImportError:
-                raise ScrapeError('ChatGoogle is not available. Please ensure browser_use supports Gemini and is up to date.', {'url': url})
-            llm = ChatGoogle(model='gemini-2.0-flash-exp')
+                print('[ERROR] ChatGoogle is not available')
+                return {**default_response, 'error': 'ChatGoogle is not available'}
+            llm = ChatGoogle(model='gemini-1.5-pro', api_key=GOOGLE_API_KEY)
         else:
             print('[DEBUG] GOOGLE_API_KEY not set, falling back to OpenAI')
             from browser_use.llm import ChatOpenAI
@@ -535,29 +550,41 @@ async def scrape_product_data(url: str) -> dict:
         return extracted
     except Exception as e:
         print(f"[ERROR] Scraping error: {str(e)}")
-        return {
-            'name': None,
-            'price': None,
-            'images': [],
-            'description': None,
-            'reviews': [],
-            'seller': None,
-            'features': [],
-            'image_analysis': [],
-            'error': str(e)
-        }
+        return {**default_response, 'error': str(e)}
 
 def analyze_product_authenticity(product_data: dict) -> dict:
     """Enhanced product authenticity analysis with more detailed prompts."""
     try:
+        # Ensure product_data has all required fields
+        if not isinstance(product_data, dict):
+            return {
+                'verdict': 'Unknown',
+                'confidence': 0,
+                'analysis': 'Error: Invalid product data format',
+                'full_analysis': 'Error: Invalid product data format',
+                'product_data': {}
+            }
+
+        # Initialize missing fields with defaults
+        product_data = {
+            'name': product_data.get('name', 'Unknown Product'),
+            'price': product_data.get('price', 'N/A'),
+            'seller': product_data.get('seller', 'Unknown Seller'),
+            'description': product_data.get('description', ''),
+            'features': product_data.get('features', []),
+            'reviews': product_data.get('reviews', []),
+            'suspicious_reviews': product_data.get('suspicious_reviews', []),
+            'image_analysis': product_data.get('image_analysis', [])
+        }
+
         # Prepare a more comprehensive prompt
         prompt = f"""
         Analyze this product listing for authenticity. Consider all available data points to determine if this appears to be a genuine product or potentially counterfeit.
 
         PRODUCT INFORMATION:
         Name: {product_data['name']}
-        Price: ${product_data['price'] if product_data['price'] else 'N/A'}
-        Seller: {product_data['seller'] if product_data['seller'] else 'Unknown'}
+        Price: {product_data['price']}
+        Seller: {product_data['seller']}
         
         DETAILED DESCRIPTION:
         {product_data['description']}
@@ -569,93 +596,37 @@ def analyze_product_authenticity(product_data: dict) -> dict:
         {json.dumps(product_data['reviews'], indent=2)}
         
         SUSPICIOUS REVIEW PATTERNS:
-        {json.dumps(product_data.get('suspicious_reviews', []), indent=2)}
+        {json.dumps(product_data['suspicious_reviews'], indent=2)}
         
         IMAGE ANALYSIS RESULTS:
-        {json.dumps([analysis['analysis'] for analysis in product_data['image_analysis']], indent=2)}
-
-        Please provide a comprehensive authenticity analysis with the following sections:
-
-        1. AUTHENTICITY VERDICT:
-           - Overall assessment (Likely Authentic / Suspicious / Likely Counterfeit)
-           - Confidence level (percentage)
-           - Key factors influencing the verdict
+        {json.dumps([analysis.get('analysis', '') for analysis in product_data['image_analysis']], indent=2)}
         
-        2. PRICE ANALYSIS:
-           - Price point evaluation
-           - Comparison with market expectations
-           - Suspicious pricing patterns (if any)
-        
-        3. SELLER ASSESSMENT:
-           - Seller credibility indicators
-           - Red flags in seller information
-           - Marketplace reputation (if available)
-        
-        4. PRODUCT DESCRIPTION EVALUATION:
-           - Quality and accuracy of description
-           - Technical specifications accuracy
-           - Brand consistency
-           - Language and formatting professionalism
-        
-        5. REVIEW ANALYSIS:
-           - Review authenticity patterns
-           - Common themes in reviews
-           - Suspicious review indicators
-           - Review consistency with product claims
-        
-        6. IMAGE VERIFICATION:
-           - Image quality assessment
-           - Brand/logo accuracy
-           - Packaging authenticity
-           - Product detail consistency
-           - Common counterfeit indicators
-        
-        7. RED FLAGS:
-           Major Concerns:
-           - List critical authenticity issues
-           - Severity rating for each issue
-           
-           Minor Concerns:
-           - List potential minor issues
-           - Impact on authenticity assessment
-        
-        8. POSITIVE INDICATORS:
-           - List factors supporting authenticity
-           - Strength of each positive indicator
-        
-        9. BUYER RECOMMENDATIONS:
-           Verification Steps:
-           - Specific actions to verify authenticity
-           - Key details to check upon receipt
-           
-           Precautions:
-           - Payment and purchase protection
-           - Return policy verification
-           - Additional security measures
-        
-        10. CONFIDENCE ASSESSMENT:
-            - Explain confidence level
-            - List factors affecting confidence
-            - Note any limitations in analysis
+        Please provide:
+        1. A verdict (Likely Authentic/Suspicious/Likely Counterfeit)
+        2. Confidence level (0-100%)
+        3. Detailed analysis of all factors considered
         """
         
         response = model.generate_content(prompt)
         
         # Save verification data with enhanced metadata
-        df = pd.DataFrame([{
-            'timestamp': datetime.now().isoformat(),
-            'product_name': product_data['name'],
-            'url': product_data.get('url', ''),
-            'analysis': response.text,
-            'price': product_data.get('price', ''),
-            'seller': product_data.get('seller', ''),
-            'image_count': len(product_data['images']),
-            'review_count': len(product_data['reviews']),
-            'suspicious_reviews': len(product_data.get('suspicious_reviews', [])),
-            'feature_count': len(product_data['features'])
-        }])
-        
-        df.to_csv('product_verifications.csv', mode='a', header=False, index=False)
+        try:
+            df = pd.DataFrame([{
+                'timestamp': datetime.now().isoformat(),
+                'product_name': product_data['name'],
+                'url': product_data.get('url', ''),
+                'analysis': response.text,
+                'price': product_data.get('price', ''),
+                'seller': product_data.get('seller', ''),
+                'image_count': len(product_data.get('images', [])),
+                'review_count': len(product_data['reviews']),
+                'suspicious_reviews': len(product_data.get('suspicious_reviews', [])),
+                'feature_count': len(product_data['features'])
+            }])
+            
+            df.to_csv('product_verifications.csv', mode='a', header=False, index=False)
+        except Exception as e:
+            print(f"[WARNING] Failed to save verification data: {e}")
         
         # Parse and structure the response
         try:
@@ -674,7 +645,7 @@ def analyze_product_authenticity(product_data: dict) -> dict:
                     'name': product_data['name'],
                     'price': product_data['price'],
                     'seller': product_data['seller'],
-                    'images': product_data['images'],
+                    'images': product_data.get('images', []),
                     'features': product_data['features'][:5],
                     'reviews': product_data['reviews'][:3],
                     'suspicious_reviews': product_data.get('suspicious_reviews', [])
@@ -684,14 +655,26 @@ def analyze_product_authenticity(product_data: dict) -> dict:
             return structured_response
             
         except Exception as e:
+            print(f"[WARNING] Failed to parse analysis response: {e}")
             # Fallback to raw response if parsing fails
             return {
-                'analysis': response.text,
+                'verdict': 'Unknown',
+                'confidence': 0,
+                'analysis': str(response.text),
+                'full_analysis': response.text,
                 'product_data': product_data
             }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to analyze product: {str(e)}")
+        print(f"[ERROR] Failed to analyze product: {e}")
+        error_msg = f"Failed to analyze product: {str(e)}"
+        return {
+            'verdict': 'Error',
+            'confidence': 0,
+            'analysis': error_msg,
+            'full_analysis': error_msg,
+            'product_data': product_data if isinstance(product_data, dict) else {}
+        }
 
 @app.post("/scrape_product", response_model=ProductAnalysisResponse)
 async def scrape_product(product: ProductURL):

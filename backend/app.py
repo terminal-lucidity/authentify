@@ -52,8 +52,9 @@ async def scrape_product(request: ScrapeRequest):
     print(f"Received request to scrape: {url}")
 
     # Step 1: Initialize LLM (Gemini 2.0 for scraping)
-    print("Initializing ChatGoogle (Gemini 2.0) model...")
-    llm = ChatGoogle(model='gemini-2.0-flash-exp', api_key=GOOGLE_API_KEY)
+    print("Initializing ChatGoogle (Gemini Pro) model...")
+    # Standard Gemini model initialization for backend
+    llm = ChatGoogle(model='gemini-2.5-pro', api_key=GOOGLE_API_KEY)
 
     # Step 2: Create Agent with scraping task
     task = f"Scrape the product page at {url} and extract: product images (urls or files), product description, all available features, and consumer reviews. Return as a JSON object with keys: images (list of urls/paths), description (string), features (list of strings), reviews (list of strings)."
@@ -108,9 +109,9 @@ async def scrape_product(request: ScrapeRequest):
         ])
     print(f"Saved data to {csv_file}")
 
-    # Step 6: Use Gemini 2.5 Pro to check for fake/real (direct prompt, not Agent)
-    print("Initializing ChatGoogle (Gemini 2.5 Pro) for authenticity check...")
-    llm_check = ChatGoogle(model='gemini-2.5-pro', api_key=GOOGLE_API_KEY)
+    # Step 6: Use Gemini 1.0 Pro to check for fake/real (direct prompt, not Agent)
+    print("Initializing ChatGoogle (Gemini 1.0 Pro) for authenticity check...")
+    llm_check = ChatGoogle(model='gemini-1.0-pro', api_key=GOOGLE_API_KEY)
     prompt = (
         "Given the following product data, analyze and determine if any of the images, content, or reviews appear fake or AI-generated. "
         "Return a JSON object with keys: images, description, features, reviews. "
@@ -123,14 +124,29 @@ async def scrape_product(request: ScrapeRequest):
     try:
         response = await llm_check.ainvoke([user_message])
         import json
+        # Fix: extract string from response.completion correctly
+        completion_str = None
         if hasattr(response, 'completion'):
-            authenticity_json = json.loads(response.completion)
+            completion = response.completion
+            if isinstance(completion, str):
+                completion_str = completion
+            elif hasattr(completion, 'content'):
+                completion_str = completion.content
+            else:
+                completion_str = str(completion)
         else:
-            authenticity_json = json.loads(response)
+            completion_str = str(response)
+        authenticity_json = json.loads(completion_str)
         authenticity = AuthenticityResult(**authenticity_json)
     except Exception as e:
         print(f"Error during authenticity check: {e}")
-        authenticity = AuthenticityResult()
+        # Always return a dict for authenticity
+        authenticity = AuthenticityResult(
+            images={"verdict": "error", "explanation": str(e)},
+            description={"verdict": "error", "explanation": str(e)},
+            features={"verdict": "error", "explanation": str(e)},
+            reviews={"verdict": "error", "explanation": str(e)}
+        )
 
     print(f"Authenticity analysis: {authenticity.dict()}")
 
