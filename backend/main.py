@@ -20,6 +20,8 @@ from browser_use import Agent, BrowserSession
 import google.generativeai as genai
 from bs4 import BeautifulSoup, Tag
 from fastapi.responses import JSONResponse
+from browser_use.llm import ChatOllama
+# from browser_use.llm import ChatGoogle  # Gemini (commented out)
 
 # Load environment variables
 load_dotenv()
@@ -394,19 +396,21 @@ async def scrape_product_data(url: str) -> dict:
     
     try:
         import os
-        # Use Gemini (ChatGoogle) if GOOGLE_API_KEY is set, else fallback to OpenAI
-        if os.getenv('GOOGLE_API_KEY'):
-            print('[DEBUG] Using Gemini (ChatGoogle) LLM for browser_use agent')
-            try:
-                from browser_use.llm import ChatGoogle
-            except ImportError:
-                print('[ERROR] ChatGoogle is not available')
-                return {**default_response, 'error': 'ChatGoogle is not available'}
-            llm = ChatGoogle(model='Gemini-2.0-flash', api_key=GOOGLE_API_KEY)
-        else:
-            print('[DEBUG] GOOGLE_API_KEY not set, falling back to OpenAI')
-            from browser_use.llm import ChatOpenAI
-            llm = ChatOpenAI(model='gpt-4o')
+        # Use Ollama (llama3) for free, local inference
+        llm = ChatOllama(model='llama3')
+        # If you want to use Gemini instead, uncomment below and comment out the Ollama line:
+        # if os.getenv('GOOGLE_API_KEY'):
+        #     print('[DEBUG] Using Gemini (ChatGoogle) LLM for browser_use agent')
+        #     try:
+        #         from browser_use.llm import ChatGoogle
+        #     except ImportError:
+        #         print('[ERROR] ChatGoogle is not available')
+        #         return {**default_response, 'error': 'ChatGoogle is not available'}
+        #     llm = ChatGoogle(model='gemini-2.5-pro', api_key=GOOGLE_API_KEY)
+        # else:
+        #     print('[DEBUG] GOOGLE_API_KEY not set, falling back to OpenAI')
+        #     from browser_use.llm import ChatOpenAI
+        #     llm = ChatOpenAI(model='gpt-4o')
         task = (
             f"Go to this product page: {url}\n"
             "Extract the following as a JSON object with these exact keys:\n"

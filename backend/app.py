@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from browser_use.llm import ChatGoogle
 from browser_use import Agent
 from browser_use.llm.messages import UserMessage
+from browser_use.llm import ChatOllama
 
 app = FastAPI()
 
@@ -113,6 +114,8 @@ def list_gemini_models():
         return JSONResponse(content={"models": model_names})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+llm = ChatOllama(model='mistral')
 
 
 if __name__ == "__main__":

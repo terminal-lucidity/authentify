@@ -1,0 +1,237 @@
+.result-container {
+  width: 100%;
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.result-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.result-header {
+  padding: 1.5rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.result-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.authentic-header {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #059669;
+}
+
+.fake-header {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: #dc2626;
+}
+
+.error-header {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: #dc2626;
+}
+
+.result-content {
+  padding: 2rem;
+}
+
+.verdict-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.verdict-badge {
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
+  font-weight: 600;
+  font-size: 1rem;
+  text-transform: uppercase;
+}
+
+.verdict-badge.authentic {
+  background-color: #dcfce7;
+  color: #059669;
+}
+
+.verdict-badge.fake {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.confidence-score {
+  font-size: 0.95rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.analysis-section {
+  margin-bottom: 2rem;
+}
+
+.analysis-section h3 {
+  font-size: 1.2rem;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+
+.analysis-text {
+  color: #4b5563;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  font-size: 1rem;
+}
+
+.recommendations-section {
+  background: #f8fafc;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.recommendations-section h3 {
+  font-size: 1.2rem;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+
+.recommendations-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.recommendation-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 0.75rem 0;
+  color: #4b5563;
+  line-height: 1.5;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.recommendation-item:last-child {
+  border-bottom: none;
+}
+
+.recommendation-item::before {
+  content: "•";
+  color: #6366f1;
+  font-weight: bold;
+  margin-right: 0.75rem;
+}
+
+.action-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #6366f1;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 1rem;
+}
+
+.action-button:hover {
+  background: #4f46e5;
+  transform: translateY(-1px);
+}
+
+.error-message {
+  color: #991b1b;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .result-card {
+    background: rgba(17, 24, 39, 0.95);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  }
+
+  .result-header {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .result-header h2 {
+    color: #f3f4f6;
+  }
+
+  .authentic-header {
+    background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+    color: #34d399;
+  }
+
+  .fake-header {
+    background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+    color: #fca5a5;
+  }
+
+  .error-header {
+    background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+    color: #fca5a5;
+  }
+
+  .verdict-badge.authentic {
+    background-color: #065f46;
+    color: #34d399;
+  }
+
+  .verdict-badge.fake {
+    background-color: #991b1b;
+    color: #fca5a5;
+  }
+
+  .confidence-score {
+    color: #9ca3af;
+  }
+
+  .analysis-section h3 {
+    color: #e5e7eb;
+  }
+
+  .analysis-text {
+    color: #d1d5db;
+  }
+
+  .recommendations-section {
+    background: rgba(31, 41, 55, 0.5);
+  }
+
+  .recommendations-section h3 {
+    color: #e5e7eb;
+  }
+
+  .recommendation-item {
+    color: #d1d5db;
+    border-bottom: 1px solid #374151;
+  }
+
+  .recommendation-item::before {
+    color: #818cf8;
+  }
+
+  .error-message {
+    color: #fca5a5;
+  }
+} 
