@@ -5,5 +5,5 @@ google-generativeai==0.3.2
 beautifulsoup4==4.12.3
 requests==2.31.0
 pandas==2.2.0
-python-multipart==0.0.9
+python-multipart==0.0.22
 aiohttp==3.9.3 
